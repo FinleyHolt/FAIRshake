@@ -1,4 +1,4 @@
-name: Build, Test, and Upload Python Package to Test PyPI
+name: Build and Test Python Package Locally
 
 on:
   push:
@@ -6,12 +6,15 @@ on:
       - main
   release:
     types: [created]
+  # Optionally, add 'workflow_dispatch' to trigger manually
+  # workflow_dispatch:
 
 permissions:
   contents: read
+  # Adjust permissions as needed
 
 jobs:
-  build-test:
+  build-test-act:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -48,29 +51,3 @@ jobs:
       - name: Run tests
         run: |
           python -m unittest discover
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-distributions
-          path: dist/
-
-  upload-test-pypi:
-    runs-on: ubuntu-latest
-    needs: build-test
-    if: github.event_name == 'push' || github.event_name == 'release'
-
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: built-distributions
-          path: dist/
-
-      - name: Upload package to Test PyPI
-        uses: pypa/gh-action-pypi-publish@v1.4.2
-        with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
-          packages_dir: dist/
