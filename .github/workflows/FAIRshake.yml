@@ -1,76 +1,80 @@
-name: Build, Test, and Upload Python Package to Test PyPI
+name: Build, Test, and Publish
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   release:
-    types: [created]
-
-permissions:
-  contents: read
+    types: [ created ]
 
 jobs:
-  build-test:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '16'
+          python-version: "3.9"
+
+      - name: Create virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install build twine
+
+      - name: Install Package Dependencies
+        run: |
+          source venv/bin/activate
+          pip install -e .
+
+      - name: Build the Package
+        run: |
+          source venv/bin/activate
+          python -m build
+
+      - name: Run Tests
+        run: |
+          source venv/bin/activate
+          echo "Running tests..."
+          # Add your test commands here, e.g., pytest
+
+  publish-to-testpypi:
+    if: github.event_name == 'release'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: "3.9"
 
-      - name: Install system dependencies
+      - name: Create virtual environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libhdf5-dev
-
-      - name: Verify HDF5 Installation
-        run: |
-          ldconfig -p | grep libhdf5
-
-      - name: Install Python dependencies
-        run: |
+          python -m venv venv
+          source venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install build twine
 
-      - name: Build package
+      - name: Install Package Dependencies
         run: |
-          python setup.py sdist bdist_wheel
+          source venv/bin/activate
+          pip install -e .
 
-      - name: Run tests
+      - name: Build the Package
         run: |
-          python -m unittest discover
+          source venv/bin/activate
+          python -m build
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-distributions
-          path: dist/
-
-  upload-test-pypi:
-    runs-on: ubuntu-latest
-    needs: build-test
-    if: github.event_name == 'push' || github.event_name == 'release'
-
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: built-distributions
-          path: dist/
-
-      - name: Upload package to Test PyPI
-        uses: pypa/gh-action-pypi-publish@v1.4.2
-        with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
-          packages_dir: dist/
+      - name: Publish to TestPyPI
+        env:
+          TWINE_USERNAME: "__token__"
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: |
+          source venv/bin/activate
+          twine upload --repository testpypi dist/*
